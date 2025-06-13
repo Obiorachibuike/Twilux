@@ -101,11 +101,11 @@
   }
   
   ::-webkit-scrollbar-thumb {
-    @apply bg-muted-foreground/30 rounded-full;
+    @apply bg-muted-foreground opacity-30 rounded-full;
   }
   
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-muted-foreground/50;
+    @apply bg-muted-foreground opacity-50;
   }
 }
 
@@ -116,7 +116,7 @@
   }
   
   .nav-tab.active {
-    @apply text-primary bg-primary/10;
+    @apply text-primary bg-primary bg-opacity-10;
   }
   
   .nav-tab-mobile {
@@ -129,7 +129,7 @@
   
   /* Custom button variants */
   .btn-twitter {
-    @apply bg-primary hover:bg-primary/90 text-primary-foreground rounded-full font-medium transition-colors;
+    @apply bg-primary hover:bg-primary hover:bg-opacity-90 text-primary-foreground rounded-full font-medium transition-colors;
   }
   
   /* Loading animations */
@@ -177,7 +177,7 @@
   }
   
   .interaction-btn.bookmarked {
-    @apply text-primary hover:text-primary/80;
+    @apply text-primary hover:text-primary hover:opacity-80;
   }
 }
 

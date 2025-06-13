@@ -45,9 +45,9 @@ export const posts = pgTable("posts", {
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   content: text("content").notNull(),
   imageUrl: varchar("image_url"),
-  parentPostId: integer("parent_post_id").references(() => posts.id),
+  parentPostId: integer("parent_post_id"),
   isRepost: boolean("is_repost").default(false),
-  originalPostId: integer("original_post_id").references(() => posts.id),
+  originalPostId: integer("original_post_id"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

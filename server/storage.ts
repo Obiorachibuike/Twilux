@@ -226,8 +226,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createPost(post: InsertPost): Promise<Post> {
-    const [newPost] = await db.insert(posts).values(post).returning();
-    return newPost;
+    const result = await db.insert(posts).values(post).returning();
+    return result[0];
   }
 
   async getPost(id: number, currentUserId?: string): Promise<PostWithUser | undefined> {
@@ -367,7 +367,7 @@ export class DatabaseStorage implements IStorage {
       .delete(posts)
       .where(and(eq(posts.id, id), eq(posts.userId, userId)))
       .returning();
-    return result.length > 0;
+    return Array.isArray(result) && result.length > 0;
   }
 
   async likePost(userId: string, postId: number): Promise<boolean> {
@@ -541,7 +541,7 @@ export class DatabaseStorage implements IStorage {
 
   async deletePostAsAdmin(postId: number): Promise<boolean> {
     const result = await db.delete(posts).where(eq(posts.id, postId)).returning();
-    return result.length > 0;
+    return Array.isArray(result) && result.length > 0;
   }
 }
 
