@@ -60,13 +60,9 @@ export function PostCard({ post }: PostCardProps) {
   const bookmarkMutation = useMutation({
     mutationFn: async () => {
       if (post.isBookmarked) {
-        await apiRequest(`/api/posts/${post.id}/unbookmark`, {
-          method: "DELETE",
-        });
+        await apiRequest(`/api/posts/${post.id}/bookmark`, "DELETE");
       } else {
-        await apiRequest(`/api/posts/${post.id}/bookmark`, {
-          method: "POST",
-        });
+        await apiRequest(`/api/posts/${post.id}/bookmark`, "POST");
       }
     },
     onSuccess: () => {
@@ -83,7 +79,7 @@ export function PostCard({ post }: PostCardProps) {
 
   const commentMutation = useMutation({
     mutationFn: async (content: string) => {
-      await apiRequest(`/api/posts/${post.id}/comments`, {
+      return await fetch(`/api/posts/${post.id}/comments`, {
         method: "POST",
         body: JSON.stringify({ content }),
         headers: { "Content-Type": "application/json" },

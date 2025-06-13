@@ -20,11 +20,13 @@ export function CreatePost() {
 
   const createPostMutation = useMutation({
     mutationFn: async (postContent: string) => {
-      await apiRequest("/api/posts", {
+      const response = await fetch("/api/posts", {
         method: "POST",
         body: JSON.stringify({ content: postContent }),
         headers: { "Content-Type": "application/json" },
       });
+      if (!response.ok) throw new Error("Failed to create post");
+      return response.json();
     },
     onSuccess: () => {
       setContent("");
