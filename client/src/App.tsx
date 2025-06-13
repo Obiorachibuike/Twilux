@@ -11,6 +11,7 @@ import Landing from "@/pages/Landing";
 import Home from "@/pages/Home";
 import Explore from "@/pages/Explore";
 import Profile from "@/pages/Profile";
+import Settings from "@/pages/Settings";
 import Admin from "@/pages/Admin";
 
 function Router() {
@@ -33,6 +34,7 @@ function Router() {
           <Route path="/" component={Home} />
           <Route path="/explore" component={Explore} />
           <Route path="/profile/:id" component={Profile} />
+          <Route path="/settings" component={Settings} />
           <Route path="/admin" component={Admin} />
         </Layout>
       )}

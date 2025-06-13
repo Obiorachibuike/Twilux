@@ -40,13 +40,9 @@ export function PostCard({ post }: PostCardProps) {
   const likeMutation = useMutation({
     mutationFn: async () => {
       if (post.isLiked) {
-        await apiRequest(`/api/posts/${post.id}/unlike`, {
-          method: "DELETE",
-        });
+        await apiRequest(`/api/posts/${post.id}/like`, "DELETE");
       } else {
-        await apiRequest(`/api/posts/${post.id}/like`, {
-          method: "POST",
-        });
+        await apiRequest(`/api/posts/${post.id}/like`, "POST");
       }
     },
     onSuccess: () => {
