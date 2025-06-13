@@ -1,21 +1,22 @@
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { PostWithUser } from "@shared/schema";
-import { apiRequest } from "@/lib/queryClient";
-import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Card, CardContent } from "@/components/ui/card";
-import { Heart, MessageCircle, Repeat2, Bookmark, MoreHorizontal } from "lucide-react";
+import { Link } from "wouter";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import { isUnauthorizedError } from "@/lib/authUtils";
+import { apiRequest } from "@/lib/queryClient";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
+import { Heart, MessageCircle, Repeat2, Bookmark, Share, MoreHorizontal } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { PostWithUser, User as UserType, Comment } from "@shared/schema";
 
 interface PostCardProps {
   post: PostWithUser;
@@ -25,38 +26,36 @@ export function PostCard({ post }: PostCardProps) {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [isLiked, setIsLiked] = useState(post.isLiked || false);
-  const [isBookmarked, setIsBookmarked] = useState(post.isBookmarked || false);
-  const [likesCount, setLikesCount] = useState(post.likesCount);
+  const [showComments, setShowComments] = useState(false);
+  const [commentText, setCommentText] = useState("");
+
+  const typedUser = user as UserType | undefined;
+
+  // Fetch comments for this post
+  const { data: comments = [] } = useQuery({
+    queryKey: ["/api/comments", post.id],
+    enabled: showComments,
+  });
 
   const likeMutation = useMutation({
     mutationFn: async () => {
-      if (isLiked) {
-        await apiRequest("DELETE", `/api/posts/${post.id}/like`);
+      if (post.isLiked) {
+        await apiRequest(`/api/posts/${post.id}/unlike`, {
+          method: "DELETE",
+        });
       } else {
-        await apiRequest("POST", `/api/posts/${post.id}/like`);
+        await apiRequest(`/api/posts/${post.id}/like`, {
+          method: "POST",
+        });
       }
     },
     onSuccess: () => {
-      setIsLiked(!isLiked);
-      setLikesCount(prev => isLiked ? prev - 1 : prev + 1);
       queryClient.invalidateQueries({ queryKey: ["/api/posts"] });
     },
-    onError: (error) => {
-      if (isUnauthorizedError(error)) {
-        toast({
-          title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
-        return;
-      }
+    onError: () => {
       toast({
         title: "Error",
-        description: "Failed to update like",
+        description: "Failed to update like status",
         variant: "destructive",
       });
     },
@@ -64,193 +63,256 @@ export function PostCard({ post }: PostCardProps) {
 
   const bookmarkMutation = useMutation({
     mutationFn: async () => {
-      if (isBookmarked) {
-        await apiRequest("DELETE", `/api/posts/${post.id}/bookmark`);
-      } else {
-        await apiRequest("POST", `/api/posts/${post.id}/bookmark`);
-      }
-    },
-    onSuccess: () => {
-      setIsBookmarked(!isBookmarked);
-      toast({
-        title: isBookmarked ? "Bookmark removed" : "Post bookmarked",
-        description: isBookmarked ? "Post removed from bookmarks" : "Post saved to bookmarks",
-      });
-    },
-    onError: (error) => {
-      if (isUnauthorizedError(error)) {
-        toast({
-          title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
-          variant: "destructive",
+      if (post.isBookmarked) {
+        await apiRequest(`/api/posts/${post.id}/unbookmark`, {
+          method: "DELETE",
         });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
-        return;
+      } else {
+        await apiRequest(`/api/posts/${post.id}/bookmark`, {
+          method: "POST",
+        });
       }
-      toast({
-        title: "Error",
-        description: "Failed to update bookmark",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: async () => {
-      await apiRequest("DELETE", `/api/posts/${post.id}`);
     },
     onSuccess: () => {
-      toast({
-        title: "Success",
-        description: "Post deleted successfully",
-      });
       queryClient.invalidateQueries({ queryKey: ["/api/posts"] });
     },
-    onError: (error) => {
-      if (isUnauthorizedError(error)) {
-        toast({
-          title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
-        return;
-      }
+    onError: () => {
       toast({
         title: "Error",
-        description: "Failed to delete post",
+        description: "Failed to update bookmark status",
         variant: "destructive",
       });
     },
   });
 
-  const handleLike = () => {
-    if (!user) {
+  const commentMutation = useMutation({
+    mutationFn: async (content: string) => {
+      await apiRequest(`/api/posts/${post.id}/comments`, {
+        method: "POST",
+        body: JSON.stringify({ content }),
+        headers: { "Content-Type": "application/json" },
+      });
+    },
+    onSuccess: () => {
+      setCommentText("");
+      queryClient.invalidateQueries({ queryKey: ["/api/comments", post.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/posts"] });
       toast({
-        title: "Login required",
-        description: "Please log in to like posts",
+        title: "Success",
+        description: "Comment added successfully",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to add comment",
         variant: "destructive",
       });
-      return;
+    },
+  });
+
+  const handleComment = () => {
+    if (commentText.trim()) {
+      commentMutation.mutate(commentText.trim());
     }
-    likeMutation.mutate();
   };
 
-  const handleBookmark = () => {
-    if (!user) {
-      toast({
-        title: "Login required",
-        description: "Please log in to bookmark posts",
-        variant: "destructive",
+  const handleShare = async () => {
+    try {
+      await navigator.share({
+        title: `Post by ${post.user.firstName} ${post.user.lastName}`,
+        text: post.content,
+        url: window.location.href,
       });
-      return;
-    }
-    bookmarkMutation.mutate();
-  };
-
-  const handleDelete = () => {
-    if (confirm("Are you sure you want to delete this post?")) {
-      deleteMutation.mutate();
+    } catch (error) {
+      // Fallback to clipboard
+      navigator.clipboard.writeText(window.location.href);
+      toast({
+        title: "Link copied",
+        description: "Post link copied to clipboard",
+      });
     }
   };
 
   return (
-    <Card className="border-b border-border hover:bg-muted/50 transition-colors cursor-pointer">
-      <CardContent className="p-4">
-        <div className="flex space-x-3">
-          <Avatar className="h-12 w-12">
-            <AvatarImage src={post.user.profileImageUrl || undefined} />
-            <AvatarFallback>
-              {post.user.firstName?.[0]}{post.user.lastName?.[0]}
-            </AvatarFallback>
-          </Avatar>
-          
-          <div className="flex-1">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <h3 className="font-semibold">
+    <Card className="bg-white/70 dark:bg-gray-900/70 backdrop-blur-sm border-gray-200/50 dark:border-gray-800/50 hover:shadow-lg transition-all duration-200">
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between">
+          <Link href={`/profile/${post.user.username || post.user.id}`}>
+            <div className="flex items-center space-x-3 hover:opacity-80 transition-opacity">
+              <Avatar className="h-12 w-12 ring-2 ring-white/50 dark:ring-gray-800/50">
+                <AvatarImage src={post.user.profileImageUrl || undefined} />
+                <AvatarFallback className="bg-gradient-to-r from-blue-500 to-purple-600 text-white">
+                  {post.user.firstName?.[0]}{post.user.lastName?.[0]}
+                </AvatarFallback>
+              </Avatar>
+              <div>
+                <p className="font-semibold text-gray-900 dark:text-gray-100">
                   {post.user.firstName} {post.user.lastName}
-                </h3>
+                </p>
                 {post.user.username && (
-                  <span className="text-muted-foreground">@{post.user.username}</span>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    @{post.user.username}
+                  </p>
                 )}
-                <span className="text-muted-foreground">·</span>
-                <span className="text-muted-foreground">
+                <p className="text-xs text-gray-400 dark:text-gray-500">
                   {formatDistanceToNow(new Date(post.createdAt), { addSuffix: true })}
-                </span>
+                </p>
               </div>
-              
-              {(user?.id === post.userId || user?.isAdmin) && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem
-                      onClick={handleDelete}
-                      className="text-destructive"
-                    >
-                      Delete Post
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
             </div>
-            
-            <p className="mt-2 text-foreground whitespace-pre-wrap">{post.content}</p>
-            
-            {post.imageUrl && (
-              <img
-                src={post.imageUrl}
-                alt="Post image"
-                className="mt-3 rounded-2xl w-full max-h-96 object-cover"
-              />
+          </Link>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={handleShare}>
+                <Share className="h-4 w-4 mr-2" />
+                Share
+              </DropdownMenuItem>
+              {typedUser?.id === post.userId && (
+                <DropdownMenuItem className="text-destructive">
+                  Delete Post
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </CardHeader>
+
+      <CardContent className="pt-0">
+        <p className="text-gray-800 dark:text-gray-200 text-lg leading-relaxed mb-4">
+          {post.content}
+        </p>
+
+        {/* Engagement Metrics */}
+        <div className="flex items-center justify-between py-3 border-t border-gray-200/50 dark:border-gray-700/50">
+          <div className="flex items-center space-x-6">
+            {/* Like Button */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => likeMutation.mutate()}
+              disabled={likeMutation.isPending}
+              className={`flex items-center space-x-2 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors ${
+                post.isLiked ? "text-red-500" : "text-gray-500 dark:text-gray-400"
+              }`}
+            >
+              <Heart className={`h-5 w-5 ${post.isLiked ? "fill-current" : ""}`} />
+              <span className="text-sm font-medium">{post.likesCount}</span>
+            </Button>
+
+            {/* Comment Button */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowComments(!showComments)}
+              className="flex items-center space-x-2 text-gray-500 dark:text-gray-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+            >
+              <MessageCircle className="h-5 w-5" />
+              <span className="text-sm font-medium">{post.commentsCount}</span>
+            </Button>
+
+            {/* Repost Button */}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="flex items-center space-x-2 text-gray-500 dark:text-gray-400 hover:bg-green-50 dark:hover:bg-green-900/20 hover:text-green-600 dark:hover:text-green-400 transition-colors"
+            >
+              <Repeat2 className="h-5 w-5" />
+              <span className="text-sm font-medium">{post.repostsCount}</span>
+            </Button>
+
+            {/* Bookmark Button */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => bookmarkMutation.mutate()}
+              disabled={bookmarkMutation.isPending}
+              className={`flex items-center space-x-2 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 transition-colors ${
+                post.isBookmarked ? "text-yellow-500" : "text-gray-500 dark:text-gray-400"
+              }`}
+            >
+              <Bookmark className={`h-5 w-5 ${post.isBookmarked ? "fill-current" : ""}`} />
+            </Button>
+          </div>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleShare}
+            className="text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+          >
+            <Share className="h-4 w-4" />
+          </Button>
+        </div>
+
+        {/* Comments Section */}
+        {showComments && (
+          <div className="mt-4 space-y-4 border-t border-gray-200/50 dark:border-gray-700/50 pt-4">
+            {/* Add Comment */}
+            {typedUser && (
+              <div className="flex items-start space-x-3">
+                <Avatar className="h-8 w-8">
+                  <AvatarImage src={typedUser.profileImageUrl || undefined} />
+                  <AvatarFallback className="bg-gradient-to-r from-blue-500 to-purple-600 text-white text-sm">
+                    {typedUser.firstName?.[0]}{typedUser.lastName?.[0]}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1 space-y-2">
+                  <Textarea
+                    placeholder="Write a comment..."
+                    value={commentText}
+                    onChange={(e) => setCommentText(e.target.value)}
+                    className="min-h-[80px] resize-none bg-gray-50 dark:bg-gray-800 border-0"
+                  />
+                  <div className="flex justify-end">
+                    <Button
+                      size="sm"
+                      onClick={handleComment}
+                      disabled={!commentText.trim() || commentMutation.isPending}
+                      className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
+                    >
+                      {commentMutation.isPending ? "Posting..." : "Comment"}
+                    </Button>
+                  </div>
+                </div>
+              </div>
             )}
-            
-            <div className="flex items-center justify-between mt-4 max-w-md">
-              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-primary">
-                <MessageCircle className="h-4 w-4 mr-2" />
-                <span>{post.commentsCount}</span>
-              </Button>
-              
-              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-green-500">
-                <Repeat2 className="h-4 w-4 mr-2" />
-                <span>{post.repostsCount}</span>
-              </Button>
-              
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleLike}
-                disabled={likeMutation.isPending}
-                className={`text-muted-foreground hover:text-red-500 ${
-                  isLiked ? "text-red-500" : ""
-                }`}
-              >
-                <Heart className={`h-4 w-4 mr-2 ${isLiked ? "fill-current" : ""}`} />
-                <span>{likesCount}</span>
-              </Button>
-              
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleBookmark}
-                disabled={bookmarkMutation.isPending}
-                className={`text-muted-foreground hover:text-primary ${
-                  isBookmarked ? "text-primary" : ""
-                }`}
-              >
-                <Bookmark className={`h-4 w-4 ${isBookmarked ? "fill-current" : ""}`} />
-              </Button>
+
+            {/* Comments List */}
+            <div className="space-y-3">
+              {comments.map((comment: Comment & { user: UserType }) => (
+                <div key={comment.id} className="flex items-start space-x-3">
+                  <Avatar className="h-8 w-8">
+                    <AvatarImage src={comment.user.profileImageUrl || undefined} />
+                    <AvatarFallback className="bg-gradient-to-r from-blue-500 to-purple-600 text-white text-sm">
+                      {comment.user.firstName?.[0]}{comment.user.lastName?.[0]}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1">
+                    <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
+                      <div className="flex items-center space-x-2 mb-1">
+                        <Link href={`/profile/${comment.user.username || comment.user.id}`}>
+                          <span className="font-medium text-sm text-gray-900 dark:text-gray-100 hover:underline">
+                            {comment.user.firstName} {comment.user.lastName}
+                          </span>
+                        </Link>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                          {formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
+                        </span>
+                      </div>
+                      <p className="text-gray-800 dark:text-gray-200 text-sm">{comment.content}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
-        </div>
+        )}
       </CardContent>
     </Card>
   );
